@@ -13,6 +13,8 @@ jobs:
       uses: actions/setup-python@v3 
       with:
         python-version: "3.10" 
+    - name: Install requests Package
+      run: pip install requests
     - name: Run update-readme.py 
       run: python update-readme.py
     - name: Commit changes 
