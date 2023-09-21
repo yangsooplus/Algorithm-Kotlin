@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
 import os
 import subprocess
+import requests
 
 def count_files_in_folders(directory):
     folder_data = {}
@@ -14,8 +15,8 @@ def count_files_in_folders(directory):
 def update_readme(folder_data, recent_commit_files):
     with open("README.md", "w") as readme_file:
         readme_file.write("\n## 최근 푼 문제\n\n")
-        for time, msg in recent_commit_files:
-            readme_file.write(f"- {time} {msg}\n")
+        for commit in recent_commit_files:
+            readme_file.write(f"- {commit}\n")
 
         readme_file.write("---\n")
         readme_file.write("## 지금까지 푼 문제\n\n")
@@ -24,23 +25,44 @@ def update_readme(folder_data, recent_commit_files):
             readme_file.write(f"|`{folder}`|{file_count}|\n")
 
 
-def get_recently_committed_files(limit=3):
-    git_command = f'git log --pretty=format:"%ad:%s" --date=format:"%Y-%m-%d" -n {limit}'
-    result = subprocess.run(git_command, shell=True, stdout=subprocess.PIPE, text=True)
-    log_output = result.stdout.splitlines()
-    
-    commits = []
-    for line in log_output:
-        parts = line.strip().split(':')
-        if len(parts) == 2:
-            commit_time, commit_msg = parts
-            commits.append((commit_time, commit_msg))
-    
-    return commits
+
+def get_recent_commits_with_links(owner, repo, limit=10, token=None):
+    # GitHub API 엔드포인트 URL 생성
+    url = f"https://api.github.com/repos/{owner}/{repo}/commits?per_page={limit}"
+
+    # 헤더에 토큰 추가 (토큰 없이는 public 리포지토리만 접근 가능)
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    try:
+        # GitHub API 호출
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+
+        # API 응답 JSON 파싱
+        data = response.json()
+
+        commits = []
+        for commit in data:
+            commit_message = commit["commit"]["message"]
+            if "auto" in commit_message or ".kt" not in commit_message:
+                continue
+            commit_url = commit["html_url"]
+            commit_date = commit["commit"]["committer"]["date"][:10]
+            commits.append(f"{commit_date} [{commit_message}]({commit_url})")
+            if len(commits) >= 3:
+                break
+
+        return commits
+    except requests.exceptions.RequestException as e:
+        print(f"GitHub API 호출 중 오류 발생: {e}")
+        return None
+
 
 
 if __name__ == "__main__":
     directory_to_scan = "solutions" 
     folder_data = count_files_in_folders(directory_to_scan)
-    update_readme(folder_data, get_recently_committed_files())
+    update_readme(folder_data, get_recent_commits_with_links("yangsooplus", "Algorithm-Kotlin"))
 
